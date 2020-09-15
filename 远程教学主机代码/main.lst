@@ -1,0 +1,578 @@
+C51 COMPILER V9.59.0.0   MAIN                                                              12/25/2019 12:50:40 PAGE 1   
+
+
+C51 COMPILER V9.59.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Output\main.obj
+COMPILER INVOKED BY: C:\Usertemp\UV4\C51\BIN\C51.EXE User\main.c LARGE OPTIMIZE(8,SPEED) BROWSE INCDIR(.\APP\ds18b20;.\A
+                    -PP\tftlcd;.\APP\touch;.\GUI;.\Public;.\User;.\APP\adc;.\APP\ds1302;.\APP\time) DEBUG OBJECTEXTEND PRINT(.\main.lst) TABS
+                    -(2) OBJECT(.\Output\main.obj)
+
+line level    source
+
+   1          /**  
+   2          ×¢Òâ£ºÉæ¼°µ½´®¿ÚÍ¨ÐÅµÄÇë½«¿ª·¢°åÉÏ12M¾§Õñ»»³É11.0592MHZ¡£
+   3          */
+   4          
+   5          #include "public.h"  
+   6          #include "uart.h"
+   7          #include "tftlcd.h"
+   8          #include "touch.h"
+   9          #include "gui.h"
+  10          #include "stdlib.h"
+  11          
+  12          sbit LED1=P2^6;
+  13          
+  14          #define MULTIEDIT_START_X   10        //ÆðÊ¼X×ø±ê
+  15          #define MULTIEDIT_START_Y   20      //ÆðÊ¼Y×ø±ê
+  16          #define MULTIEDIT_WIDTH     150     //³¤
+  17          #define MULTIEDIT_HEIGHT    20      //¸ß
+  18          
+  19          #define MULTIEDIT1_START_X    MULTIEDIT_START_X       //ÆðÊ¼X×ø±ê
+  20          #define MULTIEDIT1_START_Y    MULTIEDIT_START_Y+MULTIEDIT_HEIGHT+1      //ÆðÊ¼Y×ø±ê
+  21          
+  22          #define MULTIEDIT_RIM_LTOC    0XA535      //×óÉÏÍâÏßÑÕÉ«
+  23          #define MULTIEDIT_RIM_LTIC    0X8431    //×óÉÏÄÚÏßÑÕÉ«
+  24          #define MULTIEDIT_RIM_RBOC    0XFFFF    //ÓÒÏÂÍâÏßÑÕÉ«
+  25          #define MULTIEDIT_RIM_RBIC    0XDEFC    //ÓÒÏÂÄÚÏßÑÕÉ«
+  26          
+  27          #define MULTIEDIT_BACKCOLOR   WHITE     //±³¾°É«
+  28          #define MULTIEDIT_FRONTCOLOR  BLUE      //Ç°¾°É«
+  29          #define MULTIEDIT_FONTSIZE    16      //ÎÄ±¾¿òÄÚ×ÖÌå´óÐ¡
+  30          
+  31          //¶àÐÐÎÄ±¾¿ò´´½¨
+  32          //x0,y0:¾ØÐÎµÄ×óÉÏ½Ç×ø±ê
+  33          //width,height:ÎÄ±¾¿òµÄ³ß´ç
+  34          //backcolor:±³¾°ÑÕÉ«
+  35          void MultiEdit_Create(u16 x0,u16 y0,u16 width,u16 height,u16 backcolor)
+  36          {
+  37   1        gui_draw_vline(x0,y0,height,MULTIEDIT_RIM_LTOC);      //×óÍâÏß
+  38   1        gui_draw_hline(x0,y0,width,MULTIEDIT_RIM_LTOC);     //ÉÏÍâÏß
+  39   1        gui_draw_vline(x0+1,y0+1,height-2,MULTIEDIT_RIM_LTIC);  //×óÄÚÏß
+  40   1        gui_draw_hline(x0+1,y0+1,width-2,MULTIEDIT_RIM_LTIC); //ÉÏÄÚÏß
+  41   1        gui_draw_vline(x0+width-1,y0,height,MULTIEDIT_RIM_RBOC);    //ÓÒÍâÏß
+  42   1        gui_draw_hline(x0,y0+height-1,width,MULTIEDIT_RIM_RBOC);    //ÏÂÍâÏß
+  43   1        gui_draw_vline(x0+width-2,y0+1,height-2,MULTIEDIT_RIM_RBIC);  //ÓÒÄÚÏß
+  44   1        gui_draw_hline(x0+1,y0+height-2,width-2,MULTIEDIT_RIM_RBIC);  //ÏÂÄÚÏß
+  45   1        gui_fill_rectangle(x0+2,y0+2,width-3,height-3,backcolor);//Ìî³äÄÚ²¿ 
+  46   1      }
+  47          
+  48          //¶àÐÐÎÄ±¾¿òÏÔÊ¾×Ö·û´®
+  49          //x0,y0:¾ØÐÎµÄ×óÉÏ½Ç×ø±ê
+  50          //width,height:ÎÄ±¾¿òµÄ³ß´ç
+  51          //offset:¿ªÊ¼ÏÔÊ¾µÄÆ«ÒÆ
+  52          //backcolor:±³¾°ÑÕÉ«
+  53          //frontcolor:Ç°¾°ÑÕÉ«
+C51 COMPILER V9.59.0.0   MAIN                                                              12/25/2019 12:50:40 PAGE 2   
+
+  54          //size:ÎÄ×Ö´óÐ¡
+  55          //str:×Ö·û´®
+  56          void MultiEdit_ShowString(u16 x0,u16 y0,u16 width,u16 height,u16 xoffset,u16 yoffset,u16 backcolor,u16 fro
+             -ntcolor,u8 size,u8 *str)
+  57          {
+  58   1        static u16 color_temp=0;
+  59   1      
+  60   1        color_temp=BACK_COLOR;
+  61   1        BACK_COLOR=backcolor;
+  62   1        gui_show_stringex(x0+xoffset,y0+yoffset,width,height,frontcolor,size,str,0);
+  63   1        BACK_COLOR=color_temp;  
+  64   1      }
+  65          
+  66          
+  67          
+  68          
+  69          
+  70          
+  71          #define BUTTON_START_X    MULTIEDIT_START_X       //ÆðÊ¼X×ø±ê
+  72          #define BUTTON_START_Y    MULTIEDIT1_START_Y+MULTIEDIT_HEIGHT+5     //ÆðÊ¼Y×ø±ê
+  73          #define BUTTON_WIDTH    30      //³¤
+  74          #define BUTTON_HEIGHT   30      //¸ß
+  75          #define BUTTON_ARCSIZE    4       //Ä¬ÈÏÔ²½ÇµÄ°ë¾¶
+  76          
+  77          #define BUTTON_SPACE_X    10        //X¼ä¸ô
+  78          #define BUTTON_SPACE_Y    10        //Y¼ä¸ô
+  79          
+  80          //°´Å¥ÑÕÉ«¶¨Òå
+  81          #define BTN_DFU_BCFUC   0X0000    //Ä¬ÈÏËÉ¿ªµÄÑÕÉ«
+  82          #define BTN_DFU_BCFDC   0X0000    //Ä¬ÈÏ°´ÏÂµÄÑÕÉ«
+  83          
+  84          #define ARC_BTN_RIMC    0X0000    //Ô²½Ç°´Å¥±ß¿òÑÕÉ«
+  85          #define ARC_BTN_TP1C    0XD6BB    //µÚÒ»ÐÐµÄÑÕÉ«
+  86          #define ARC_BTN_UPHC    0X8452    //ÉÏ°ë²¿·ÖÑÕÉ«
+  87          #define ARC_BTN_DNHC    0X52CD    //ÏÂ°ë²¿·ÖÑÕÉ«
+  88          
+  89          #define BUTTON_BACKCOLOR  0XEF5D    //±³¾°É«
+  90          #define BUTTON_FRONTCOLOR BLACK     //Ç°¾°É«
+  91          #define BUTTON_FONTSIZE   16      //×ÖÌå´óÐ¡
+  92          
+  93          
+  94          //°´¼ü´¥Ãþ±È½ÏÖµ
+  95          #define CONTROL_START_X   BUTTON_START_X
+  96          #define CONTROL_START_Y   BUTTON_START_Y
+  97          #define CONTROL_END_X   BUTTON_START_X+BUTTON_WIDTH
+  98          #define CONTROL_END_Y   BUTTON_START_Y+BUTTON_HEIGHT
+  99          
+ 100          
+ 101          //°´Å¥´´½¨
+ 102          //x0,y0:¾ØÐÎµÄ×óÉÏ½Ç×ø±ê
+ 103          //width,height:ÎÄ±¾¿òµÄ³ß´ç
+ 104          //backcolor:±³¾°ÑÕÉ«
+ 105          //void Button_Create(u16 x0,u16 y0,u16 width,u16 height,u8 r,u16 backcolor,u16 frontcolor,u8 size,u8*str)
+ 106          void Button_Create(u16 x0,u16 y0,u16 width,u16 height,u8 r,u16 frontcolor,u8 size,u8*str)
+ 107          {
+ 108   1        gui_draw_arcrectangle(x0,y0,width,height,r,1,ARC_BTN_UPHC,ARC_BTN_DNHC);//Ìî³äÔ²½Ç°´Å¥
+ 109   1        gui_draw_arcrectangle(x0,y0,width,height,r,0,ARC_BTN_RIMC,ARC_BTN_RIMC);//»­Ô²½Ç±ß¿ò
+ 110   1        gui_draw_hline (x0+r,y0+1,width-2*r,ARC_BTN_TP1C);//µÚÒ»ÐÐ
+ 111   1        gui_show_strmid(x0+1,y0+1,width,height,frontcolor,size,str);
+ 112   1      }
+ 113          
+ 114          //°´Å¥°´ÏÂÏÔÊ¾
+C51 COMPILER V9.59.0.0   MAIN                                                              12/25/2019 12:50:40 PAGE 3   
+
+ 115          //x0,y0:¾ØÐÎµÄ×óÉÏ½Ç×ø±ê
+ 116          //width,height:ÎÄ±¾¿òµÄ³ß´ç
+ 117          //backcolor:±³¾°ÑÕÉ«
+ 118          //void Button_PressCreate(u16 x0,u16 y0,u16 width,u16 height,u8 r,u16 backcolor,u16 frontcolor,u8 size,u8*
+             -str)
+ 119          void Button_PressCreate(u16 x0,u16 y0,u16 width,u16 height,u8 r,u16 frontcolor,u8 size,u8*str)
+ 120          { 
+ 121   1        gui_draw_arcrectangle(x0,y0,width,height,r,1,WHITE,WHITE);//Ìî³äÔ²½Ç°´Å¥
+ 122   1        gui_draw_arcrectangle(x0,y0,width,height,r,0,GREEN,GREEN);//»­Ô²½Ç±ß¿ò
+ 123   1        gui_draw_hline (x0+r,y0+1,width-2*r,ARC_BTN_TP1C);//µÚÒ»ÐÐ
+ 124   1        gui_show_strmid(x0+1,y0+1,width,height,frontcolor,size,str);
+ 125   1      }
+ 126          
+ 127          
+ 128          
+ 129          
+ 130          const u8 Button_text[][2]={"1","2","3","4","5"}; //°´Å¥ÏÔÊ¾ÎÄ±¾
+ 131          
+ 132          u8 T_BUF;
+ 133          //¼òÒ×¼ÆËãÆ÷²âÊÔ
+ 134          void Calculator_Test(void)
+ 135          {
+ 136   1        u8 i=0;
+ 137   1        u8 j=0;
+ 138   1        u8 Button_PressFlag=0;
+ 139   1        u8 total_cnt=0;
+ 140   1        u8 dat1_cnt=0;
+ 141   1        u8 dat2_cnt=0;
+ 142   1        u8 fuhao_value=0;
+ 143   1        u8 fuhao_flag=0;
+ 144   1        int dat1_num=0;
+ 145   1        int dat2_num=0;
+ 146   1        int result=0;
+ 147   1        u8 pos;
+ 148   1        u8 row[]={0,2,1,0,2};
+ 149   1        u8 col[]={0,0,1,2,2};
+ 150   1        
+ 151   1        FRONT_COLOR=RED;
+ 152   1        LCD_ShowString(10,0,tftlcd_data.width,tftlcd_data.height,16,"Calculator Test");
+ 153   1          MultiEdit_Create(MULTIEDIT_START_X,MULTIEDIT_START_Y,MULTIEDIT_WIDTH,MULTIEDIT_HEIGHT,MULTIEDIT_BACKCO
+             -LOR); 
+ 154   1        MultiEdit_ShowString(MULTIEDIT_START_X,MULTIEDIT_START_Y,MULTIEDIT_WIDTH,MULTIEDIT_HEIGHT,5,2,MULTIEDIT_B
+             -ACKCOLOR,MULTIEDIT_FRONTCOLOR,MULTIEDIT_FONTSIZE," ");
+ 155   1        MultiEdit_Create(MULTIEDIT1_START_X,MULTIEDIT1_START_Y,MULTIEDIT_WIDTH,MULTIEDIT_HEIGHT,MULTIEDIT_BACKCOL
+             -OR); 
+ 156   1        MultiEdit_ShowString(MULTIEDIT1_START_X,MULTIEDIT1_START_Y,MULTIEDIT_WIDTH,MULTIEDIT_HEIGHT,5,2,MULTIEDIT
+             -_BACKCOLOR,MULTIEDIT_FRONTCOLOR,MULTIEDIT_FONTSIZE,"0");
+ 157   1        
+ 158   1        for(i=0;i<4;i++)
+ 159   1        {
+ 160   2            //Button_Create(BUTTON_START_X+(BUTTON_SPACE_X+BUTTON_WIDTH)*col[i],BUTTON_START_Y+(BUTTON_SPACE_Y+BUTT
+             -ON_HEIGHT)*row[i],BUTTON_WIDTH,BUTTON_HEIGHT,BUTTON_ARCSIZE,BUTTON_BACKCOLOR,BUTTON_FRONTCOLOR,24,Button_text[i]);  
+ 161   2        Button_Create(BUTTON_START_X+(BUTTON_SPACE_X+BUTTON_WIDTH)*col[i],BUTTON_START_Y+(BUTTON_SPACE_Y+BUTTON_H
+             -EIGHT)*row[i],BUTTON_WIDTH,BUTTON_HEIGHT,BUTTON_ARCSIZE,BUTTON_FRONTCOLOR,24,Button_text[i]);
+ 162   2        }
+ 163   1        
+ 164   1        while(1)
+ 165   1        {
+ 166   2          TOUCH_Scan();
+ 167   2          if(xpt_xy.sta)
+ 168   2          {
+ 169   3            for(i=0;i<4;i++)   //É¨Ãè°´Å¥£¬»ñÈ¡¶ÔÓ¦µÄÎ»ÖÃÐÅÏ¢
+C51 COMPILER V9.59.0.0   MAIN                                                              12/25/2019 12:50:40 PAGE 4   
+
+ 170   3            {
+ 171   4                if((xpt_xy.lcdx>=BUTTON_START_X+(BUTTON_SPACE_X+BUTTON_WIDTH)*col[i]) && 
+ 172   4                  (xpt_xy.lcdx<=BUTTON_START_X+BUTTON_WIDTH+(BUTTON_SPACE_X+BUTTON_WIDTH)*col[i])
+ 173   4                   && (xpt_xy.lcdy>=BUTTON_START_Y+(BUTTON_SPACE_Y+BUTTON_HEIGHT)*row[i]) && 
+ 174   4                  (xpt_xy.lcdy<=BUTTON_START_Y+BUTTON_HEIGHT+(BUTTON_SPACE_Y+BUTTON_HEIGHT)*row[i]))
+ 175   4                {
+ 176   5                  pos=i;
+ 177   5                  T_BUF=i+1;
+ 178   5                  Button_PressFlag=1;     
+ 179   5                } 
+ 180   4            }
+ 181   3          }
+ 182   2          else
+ 183   2          {
+ 184   3            if(Button_PressFlag)
+ 185   3            {
+ 186   4              Button_PressFlag=0;
+ 187   4              //Button_Create(BUTTON_START_X+(BUTTON_SPACE_X+BUTTON_WIDTH)*col[pos],BUTTON_START_Y+(BUTTON_SPACE_Y+B
+             -UTTON_HEIGHT)*row[pos],BUTTON_WIDTH,BUTTON_HEIGHT,BUTTON_ARCSIZE,BUTTON_BACKCOLOR,BUTTON_FRONTCOLOR,24,Button_text[pos])
+             -;
+ 188   4            Button_Create(BUTTON_START_X+(BUTTON_SPACE_X+BUTTON_WIDTH)*col[pos],BUTTON_START_Y+(BUTTON_SPACE_Y+BUTT
+             -ON_HEIGHT)*row[pos],BUTTON_WIDTH,BUTTON_HEIGHT,BUTTON_ARCSIZE,BUTTON_FRONTCOLOR,24,Button_text[pos]);
+ 189   4            }
+ 190   3          }
+ 191   2          if(Button_PressFlag)//·¢ËÍÊý¾Ý
+ 192   2          {
+ 193   3            //Button_PressCreate(BUTTON_START_X+(BUTTON_SPACE_X+BUTTON_WIDTH)*col[pos],BUTTON_START_Y+(BUTTON_SPACE
+             -_Y+BUTTON_HEIGHT)*row[pos],BUTTON_WIDTH,BUTTON_HEIGHT,BUTTON_ARCSIZE,BUTTON_BACKCOLOR,BUTTON_FRONTCOLOR,24,Button_text[p
+             -os]);      
+ 194   3          Button_PressCreate(BUTTON_START_X+(BUTTON_SPACE_X+BUTTON_WIDTH)*col[pos],BUTTON_START_Y+(BUTTON_SPACE_Y+
+             -BUTTON_HEIGHT)*row[pos],BUTTON_WIDTH,BUTTON_HEIGHT,BUTTON_ARCSIZE,BUTTON_FRONTCOLOR,24,Button_text[pos]);
+ 195   3          }
+ 196   2      
+ 197   2          i++;
+ 198   2          if(i%20==0)
+ 199   2          LED1=!LED1;
+ 200   2          delay_ms(10); 
+ 201   2        } 
+ 202   1      } 
+ 203          
+ 204          
+ 205          
+ 206          /*******************************************************************************
+ 207          ×¢ÒâÊÂÏî£º
+ 208          ½«NRF24L01²åÈë¶ÔÓ¦²å×ù
+ 209          
+ 210          ÊµÑé²Ù×÷£º
+ 211          P2^1 --- J19 D1
+ 212          P3^1 --- JP1 K1
+ 213          P3^2 --- JP1 K2
+ 214          CE   --- P1^2;
+ 215          CSN  --- P1^3;
+ 216          SCK  --- P1^7;
+ 217          MOSI --- P1^1;
+ 218          MISO --- P1^6;
+ 219          IRQ  --- P1^4;
+ 220          *******************************************************************************
+ 221          
+ 222          /***************************************************/
+ 223          #define TX_ADR_WIDTH   5  // 5¸ö×Ö½Ú¿í¶ÈµÄ·¢ËÍ/½ÓÊÕµØÖ· 
+ 224          #define TX_PLOAD_WIDTH 4  // Êý¾ÝÍ¨µÀÓÐÐ§Êý¾Ý¿í¶È
+ 225          
+C51 COMPILER V9.59.0.0   MAIN                                                              12/25/2019 12:50:40 PAGE 5   
+
+ 226          //¼ÇµÃÒý½Å³åÍ»¼ì²é
+ 227          sbit LED =  P2^1;
+ 228          
+ 229          u8 code TX_ADDRESS[TX_ADR_WIDTH] = {0x34,0xaa,0x00,0x00,0x03};  // ¶¨Òå¾²Ì¬·¢ËÍµØÖ·
+ 230          u8 RX_BUF[TX_PLOAD_WIDTH];
+ 231          u8 TX_BUF[TX_PLOAD_WIDTH];
+ 232          u8 flag;
+ 233          u8 DATA = 0x01;
+ 234          u8 bdata sta;
+ 235          sbit  RX_DR     = sta^6;
+ 236          sbit  TX_DS     = sta^5;
+ 237          sbit  MAX_RT = sta^4;
+ 238          
+ 239          sbit CE =  P1^2;
+ 240          sbit CSN=  P1^3;
+ 241          sbit SCK=  P1^7;
+ 242          sbit MOSI= P1^1;
+ 243          sbit MISO= P1^6;
+ 244          sbit IRQ = P1^4;
+ 245          
+ 246          // SPI(nRF24L01) commands
+ 247          #define READ_REG    0x00  // Define read command to register
+ 248          #define WRITE_REG   0x20  // Define write command to register
+ 249          #define RD_RX_PLOAD 0x61  // Define RX payload register address
+ 250          #define WR_TX_PLOAD 0xA0  // Define TX payload register address
+ 251          #define FLUSH_TX    0xE1  // Define flush TX register command
+ 252          #define FLUSH_RX    0xE2  // Define flush RX register command
+ 253          #define REUSE_TX_PL 0xE3  // Define reuse TX payload register command
+ 254          #define NOP         0xFF  // Define No Operation, might be used to read status register
+ 255          
+ 256          // SPI(nRF24L01) registers(addresses)
+ 257          #define CONFIG      0x00  // 'Config' register address
+ 258          #define EN_AA       0x01  // 'Enable Auto Acknowledgment' register address
+ 259          #define EN_RXADDR   0x02  // 'Enabled RX addresses' register address
+ 260          #define SETUP_AW    0x03  // 'Setup address width' register address
+ 261          #define SETUP_RETR  0x04  // 'Setup Auto. Retrans' register address
+ 262          #define RF_CH       0x05  // 'RF channel' register address
+ 263          #define RF_SETUP    0x06  // 'RF setup' register address
+ 264          #define STATUS      0x07  // 'Status' register address
+ 265          #define OBSERVE_TX  0x08  // 'Observe TX' register address
+ 266          #define CD          0x09  // 'Carrier Detect' register address
+ 267          #define RX_ADDR_P0  0x0A  // 'RX address pipe0' register address
+ 268          #define RX_ADDR_P1  0x0B  // 'RX address pipe1' register address
+ 269          #define RX_ADDR_P2  0x0C  // 'RX address pipe2' register address
+ 270          #define RX_ADDR_P3  0x0D  // 'RX address pipe3' register address
+ 271          #define RX_ADDR_P4  0x0E  // 'RX address pipe4' register address
+ 272          #define RX_ADDR_P5  0x0F  // 'RX address pipe5' register address
+ 273          #define TX_ADDR     0x10  // 'TX address' register address
+ 274          #define RX_PW_P0    0x11  // 'RX payload width, pipe0' register address
+ 275          #define RX_PW_P1    0x12  // 'RX payload width, pipe1' register address
+ 276          #define RX_PW_P2    0x13  // 'RX payload width, pipe2' register address
+ 277          #define RX_PW_P3    0x14  // 'RX payload width, pipe3' register address
+ 278          #define RX_PW_P4    0x15  // 'RX payload width, pipe4' register address
+ 279          #define RX_PW_P5    0x16  // 'RX payload width, pipe5' register address
+ 280          #define FIFO_STATUS 0x17  // 'FIFO Status Register' register address
+ 281          
+ 282          void blink(char i);
+ 283          
+ 284          /**************************************************
+ 285          *º¯ÊýÃû£º  init_io
+ 286          *º¯Êý¹¦ÄÜ£º³õÊ¼»¯IO
+ 287          *ÊäÈë£º    ÎÞ
+C51 COMPILER V9.59.0.0   MAIN                                                              12/25/2019 12:50:40 PAGE 6   
+
+ 288          *Êä³ö£º    ÎÞ
+ 289          /**************************************************/
+ 290          void init_io(void)
+ 291          {
+ 292   1          CE  = 0;        // ¹Ø±ÕÊ¹ÄÜ
+ 293   1          CSN = 1;        // SPI½ûÖ¹
+ 294   1          SCK = 0;        // SPIÊ±ÖÓÖÃµÍ
+ 295   1          IRQ = 1;        // ÖÐ¶Ï¸´Î»
+ 296   1          LED = 1;        // ¹Ø±ÕÖ¸Ê¾µÆ
+ 297   1      }
+ 298          /**************************************************/
+ 299          
+ 300          /**************************************************
+ 301          *º¯ÊýÃû£º                              SPI_RW
+ 302          *º¯Êý¹¦ÄÜ£º                            ¶ÁÐ´Ò»¸ö×Ö½Ú
+ 303          *ÊäÈë£º                                ÎÞ
+ 304          *Êä³ö£º                                ÎÞ
+ 305          /**************************************************/
+ 306          u8 SPI_RW(u8 byte)
+ 307          {
+ 308   1        u8 i;
+ 309   1        for(i=0; i<8; i++)          // Ñ­»·8´Î
+ 310   1        {
+ 311   2           MOSI = (byte & 0x80);   // byte×î¸ßÎ»Êä³öµ½MOSI
+ 312   2           byte <<= 1;             // µÍÒ»Î»ÒÆÎ»µ½×î¸ßÎ»
+ 313   2           SCK = 1;                // À­¸ßSCK,nRF24L01´ÓMOSI¶ÁÈ¡1Î»Êý¾Ý,Í¬Ê±´ÓMISOÊä³ö1Î»Êý¾Ý
+ 314   2           byte |= MISO;           // ¶ÁMISOµ½byte×îµÍÎ»
+ 315   2           SCK = 0;                // SCKÖÃµÍ
+ 316   2        }
+ 317   1        return(byte);               // ·µ»Ø¶ÁÈ¡Ò»¸ö×Ö½Ú
+ 318   1      }
+ 319          /**************************************************/
+ 320          
+ 321          /**************************************************
+ 322          *º¯ÊýÃû£º  SPI_RW_Reg
+ 323          *º¯Êý¹¦ÄÜ£ºÐ´Êý¾Ýµ½reg
+ 324          *ÊäÈë£º    ÎÞ
+ 325          *Êä³ö£º    ÎÞ
+ 326          /**************************************************/
+ 327          u8 SPI_RW_Reg(u8 reg, u8 value)
+ 328          {
+ 329   1        u8 status;
+ 330   1        CSN = 0;                   // CSNÖÃµÍ£¬¿ªÊ¼´«ÊäÊý¾Ý
+ 331   1        status = SPI_RW(reg);      // Ñ¡Ôñ¼Ä´æÆ÷£¬Í¬Ê±·µ»Ø×´Ì¬×Ö
+ 332   1        SPI_RW(value);             // Ð´Êý¾Ýµ½¼Ä´æÆ÷
+ 333   1        CSN = 1;                   // CSNÀ­¸ß£¬½áÊøÊý¾Ý´«Êä
+ 334   1        return(status);            // ·µ»Ø×´Ì¬¼Ä´æÆ÷
+ 335   1      }
+ 336          /**************************************************/
+ 337          
+ 338          /**************************************************
+ 339          *º¯ÊýÃû£º  SPI_Read
+ 340          *º¯Êý¹¦ÄÜ£º´Óreg¼Ä´æÆ÷¶Á×Ö½Ú
+ 341          *ÊäÈë£º    ÎÞ
+ 342          *Êä³ö£º    ÎÞ
+ 343          /**************************************************/
+ 344          u8 SPI_Read(u8 reg)
+ 345          {
+ 346   1        u8 reg_val;
+ 347   1        CSN = 0;                    // CSNÖÃµÍ,¿ªÊ¼´«ÊäÊý¾Ý
+ 348   1        SPI_RW(reg);                // Ñ¡Ôñ¼Ä´æÆ÷
+ 349   1        reg_val = SPI_RW(0);        // È»ºó´Ó¸Ã¼Ä´æÆ÷¶ÁÊý¾Ý
+C51 COMPILER V9.59.0.0   MAIN                                                              12/25/2019 12:50:40 PAGE 7   
+
+ 350   1        CSN = 1;                    // CSNÀ­¸ß,½áÊøÊý¾Ý´«Êä
+ 351   1        return(reg_val);            // ·µ»Ø¼Ä´æÆ÷Êý¾Ý
+ 352   1      }
+ 353          /**************************************************/
+ 354          
+ 355          /**************************************************
+ 356          *º¯ÊýÃû£º  SPI_Read_Buf
+ 357          *º¯Êý¹¦ÄÜ£º´Óreg¼Ä´æÆ÷¶ÁÊý¾Ý
+ 358          *ÊäÈë£º    ÎÞ
+ 359          *Êä³ö£º    ÎÞ
+ 360          /**************************************************/
+ 361          u8 SPI_Read_Buf(u8 reg, u8 * pBuf, u8 bytes)
+ 362          {
+ 363   1        u8 status, i;
+ 364   1        CSN = 0;                    // CSNÖÃµÍ£¬¿ªÊ¼´«ÊäÊý¾Ý
+ 365   1        status = SPI_RW(reg);       // Ñ¡Ôñ¼Ä´æÆ÷£¬Í¬Ê±·µ»Ø×´Ì¬×Ö
+ 366   1        for(i=0; i<bytes; i++)
+ 367   1          pBuf[i] = SPI_RW(0);    // Öð¸ö×Ö½Ú´ÓnRF24L01¶Á³ö
+ 368   1        CSN = 1;                    // CSNÀ­¸ß£¬½áÊøÊý¾Ý´«Êä
+ 369   1        return(status);             // ·µ»Ø×´Ì¬¼Ä´æÆ÷
+ 370   1      }
+ 371          /**************************************************/
+ 372          
+ 373          /**************************************************
+ 374          *º¯ÊýÃû£º  SPI_Write_Buf
+ 375          *º¯Êý¹¦ÄÜ£º°Ñ»º´æµÄÊý¾ÝÐ´ÈëNRF
+ 376          *ÊäÈë£º    ÎÞ
+ 377          *Êä³ö£º    ÎÞ
+ 378          /**************************************************/
+ 379          u8 SPI_Write_Buf(u8 reg, u8 * pBuf, u8 bytes)
+ 380          {
+ 381   1        u8 status, i;
+ 382   1        CSN = 0;                    // CSNÖÃµÍ£¬¿ªÊ¼´«ÊäÊý¾Ý
+ 383   1        status = SPI_RW(reg);       // Ñ¡Ôñ¼Ä´æÆ÷£¬Í¬Ê±·µ»Ø×´Ì¬×Ö
+ 384   1        for(i=0; i<bytes; i++)
+ 385   1          SPI_RW(pBuf[i]);        // Öð¸ö×Ö½ÚÐ´ÈënRF24L01
+ 386   1        CSN = 1;                    // CSNÀ­¸ß,½áÊøÊý¾Ý´«Êä
+ 387   1        return(status);             // ·µ»Ø×´Ì¬¼Ä´æÆ÷
+ 388   1      }
+ 389          /**************************************************/
+ 390          
+ 391          /**************************************************
+ 392          *º¯ÊýÃû£º   Check_ACK
+ 393          *º¯Êý¹¦ÄÜ£º ¼ì²é½ÓÊÕÉè±¸ÓÐÎÞÊý¾Ý°ü£¬Éè¶¨Ã»ÓÐÓ¦´ðÐÅºÅÖØ·¢
+ 394          *ÊäÈë£º     ÎÞ
+ 395          *Êä³ö£º     ÎÞ
+ 396          /**************************************************/
+ 397          u8 Check_ACK(bit clear)
+ 398          {
+ 399   1          delay_ms(200);
+ 400   1          while(IRQ);
+ 401   1          sta = SPI_RW(NOP);                    // ·µ»Ø×´Ì¬¼Ä´æÆ÷
+ 402   1          if(TX_DS)
+ 403   1          {
+ 404   2              blink(3);
+ 405   2          }
+ 406   1          if(MAX_RT)
+ 407   1              if(clear)                         // ÊÇ·ñÇå³ýTX FIFO£¬Ã»ÓÐÇå³ýÔÚ¸´Î»MAX_RTÖÐ¶Ï±êÖ¾ºóÖØ·¢
+ 408   1                  SPI_RW(FLUSH_TX);
+ 409   1          SPI_RW_Reg(WRITE_REG + STATUS, sta);  // Çå³ýTX_DS»òMAX_RTÖÐ¶Ï±êÖ¾
+ 410   1          IRQ = 1;
+ 411   1          if(TX_DS)
+C51 COMPILER V9.59.0.0   MAIN                                                              12/25/2019 12:50:40 PAGE 8   
+
+ 412   1              return(0x00);
+ 413   1          else
+ 414   1              return(0xff);
+ 415   1      }
+ 416          /**************************************************/
+ 417          
+ 418          /**************************************************
+ 419          *º¯ÊýÃû£º   RX_Mode
+ 420          *º¯Êý¹¦ÄÜ£º ½«nrfÉèÖÃÎª½ÓÊÕÄ£Ê½
+ 421          *ÊäÈë£º     ÎÞ
+ 422          *Êä³ö£º     ÎÞ
+ 423          /**************************************************/
+ 424          void RX_Mode(void)
+ 425          {
+ 426   1        CE = 0;
+ 427   1        SPI_Write_Buf(WRITE_REG + RX_ADDR_P0, TX_ADDRESS, TX_ADR_WIDTH);  // ½ÓÊÕÉè±¸½ÓÊÕÍ¨µÀ0Ê¹ÓÃºÍ·¢ËÍÉè±¸ÏàÍ¬µ
+             -Ä·¢ËÍµØÖ·
+ 428   1        SPI_RW_Reg(WRITE_REG + EN_AA, 0x01);               // Ê¹ÄÜ½ÓÊÕÍ¨µÀ0×Ô¶¯Ó¦´ð
+ 429   1        SPI_RW_Reg(WRITE_REG + EN_RXADDR, 0x01);           // Ê¹ÄÜ½ÓÊÕÍ¨µÀ0
+ 430   1        SPI_RW_Reg(WRITE_REG + RF_CH, 40);                 // Ñ¡ÔñÉäÆµÍ¨µÀ0x40
+ 431   1        SPI_RW_Reg(WRITE_REG + RX_PW_P0, TX_PLOAD_WIDTH);  // ½ÓÊÕÍ¨µÀ0Ñ¡ÔñºÍ·¢ËÍÍ¨µÀÏàÍ¬ÓÐÐ§Êý¾Ý¿í¶È
+ 432   1        SPI_RW_Reg(WRITE_REG + RF_SETUP, 0x07);            // Êý¾Ý´«ÊäÂÊ1Mbps,·¢Éä¹¦ÂÊ0dBm,µÍÔëÉù·Å´óÆ÷ÔöÒæ
+ 433   1        SPI_RW_Reg(WRITE_REG + CONFIG, 0x0f);              // CRCÊ¹ÄÜ£¬16Î»CRCÐ£Ñé£¬ÉÏµç£¬½ÓÊÕÄ£Ê½
+ 434   1        delay_ms(150);
+ 435   1        CE = 1;                                            // À­¸ßCEÆô¶¯½ÓÊÕÉè±¸
+ 436   1      }
+ 437          /**************************************************/
+ 438          
+ 439          /**************************************************
+ 440          *º¯ÊýÃû£º  TX_Mode
+ 441          *º¯Êý¹¦ÄÜ£º½«nrfÉèÖÃÎª·¢ËÍÄ£Ê½
+ 442          *ÊäÈë£º    ÎÞ
+ 443          *Êä³ö£º    ÎÞ
+ 444          /**************************************************/
+ 445          void TX_Mode(u8 * BUF)
+ 446          {
+ 447   1          CE = 0;
+ 448   1        SPI_Write_Buf(WRITE_REG + TX_ADDR, TX_ADDRESS, TX_ADR_WIDTH);     // Ð´Èë·¢ËÍµØÖ·
+ 449   1        SPI_Write_Buf(WRITE_REG + RX_ADDR_P0, TX_ADDRESS, TX_ADR_WIDTH);  // Ó¦´ð½ÓÊÕÉè±¸£¬½ÓÊÕÍ¨µÀ0µØÖ·ºÍ·¢ËÍµØÖ
+             -·ÏàÍ¬
+ 450   1        SPI_Write_Buf(WR_TX_PLOAD, BUF, TX_PLOAD_WIDTH);                  // Ð´Êý¾Ý°üµ½TX FIFO
+ 451   1        SPI_RW_Reg(WRITE_REG + EN_AA, 0x01);       // Ê¹ÄÜ½ÓÊÕÍ¨µÀ0×Ô¶¯Ó¦´ð
+ 452   1        SPI_RW_Reg(WRITE_REG + EN_RXADDR, 0x01);   // Ê¹ÄÜ½ÓÊÕÍ¨µÀ0
+ 453   1        SPI_RW_Reg(WRITE_REG + SETUP_RETR, 0x0a);  // ×Ô¶¯ÖØ·¢ÑÓÊ±µÈ´ý250us+86us£¬×Ô¶¯ÖØ·¢
+ 454   1        SPI_RW_Reg(WRITE_REG + RF_CH, 40);         // Ñ¡ÔñÉäÆµÍ¨µÀ0x40
+ 455   1        SPI_RW_Reg(WRITE_REG + RF_SETUP, 0x07);    // Êý¾Ý´«ÊäÂÊ1Mbps£¬·¢Éä¹¦ÂÊ0dBm£¬µÍÔëÉù·Å´óÆ÷ÔöÒæ
+ 456   1        SPI_RW_Reg(WRITE_REG + CONFIG, 0x0e);      // CRCÊ¹ÄÜ£¬16Î»CRCÐ£Ñé£¬ÉÏµç
+ 457   1          delay_ms(150);
+ 458   1          CE = 1;
+ 459   1      }
+ 460          /**************************************************/
+ 461          
+ 462          /**************************************************
+ 463          *º¯ÊýÃû£º                              NRFSendMessage
+ 464          *º¯Êý¹¦ÄÜ£º                            ÎÞÏß·¢ËÍÊý¾Ý
+ 465          *ÊäÈë£º                                ÎÞ
+ 466          *Êä³ö£º                                ÎÞ
+ 467          /**************************************************/
+ 468          void NRFSendMessage(u8 * BUF)
+ 469          {
+ 470   1        TX_Mode(BUF);
+ 471   1        Check_ACK(0);           // µÈ´ý·¢ËÍÍê±Ï£¬Çå³ýTX FIFO
+C51 COMPILER V9.59.0.0   MAIN                                                              12/25/2019 12:50:40 PAGE 9   
+
+ 472   1          SPI_RW_Reg(FLUSH_TX,0x00); //Çå³ý·¢ËÍ»º´æ
+ 473   1        delay_ms(250);
+ 474   1          delay_ms(250);
+ 475   1      }
+ 476          /**************************************************/
+ 477          
+ 478          void blink(char i)
+ 479          {
+ 480   1          while(i--)
+ 481   1          {
+ 482   2              LED = 1;
+ 483   2              delay_ms(500);
+ 484   2              LED = 0;
+ 485   2              delay_ms(500);
+ 486   2          }
+ 487   1      
+ 488   1      }
+ 489          
+ 490          
+ 491          /**************************************************
+ 492          *º¯ÊýÃû£º  CheckButtons
+ 493          *º¯Êý¹¦ÄÜ£º¼ì²é°´¼üÊÇ·ñ°´ÏÂ£¬°´ÏÂ·¢ËÍÒ»×Ö½ÚÊý¾Ý
+ 494          *ÊäÈë£º    ÎÞ
+ 495          *Êä³ö£º    ÎÞ
+ 496          /**************************************************/
+ 497          void CheckButtons()
+ 498          {
+ 499   1              TX_BUF[0]=T_BUF;
+ 500   1              NRFSendMessage(TX_BUF);        // ½«nrfÉèÖÃÎª·¢ËÍÄ£Ê½²¢·¢ËÍÊý¾Ý                
+ 501   1      }
+ 502          /**************************************************
+ 503          *º¯ÊýÃû£º                              main
+ 504          *º¯Êý¹¦ÄÜ£º                            Ö÷º¯Êý
+ 505          *ÊäÈë£º                                ÎÞ
+ 506          *Êä³ö£º                                ÎÞ
+ 507          /**************************************************/
+ 508          
+ 509          void main()
+ 510          { 
+ 511   1      
+ 512   1        UART_Init();
+ 513   1        TFTLCD_Init();
+ 514   1        init_io();                      // ³õÊ¼»¯IO
+ 515   1        Calculator_Test();
+ 516   1        CheckButtons();           // °´¼üÉ¨Ãè 
+ 517   1        while(1)
+ 518   1        {
+ 519   2          
+ 520   2        }   
+ 521   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2731    ----
+   CONSTANT SIZE    =     35    ----
+   XDATA SIZE       =     23      99
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      1    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
